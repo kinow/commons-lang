@@ -19,13 +19,12 @@ package org.apache.commons.lang3.concurrent;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -246,26 +245,26 @@ public class EventCountCircuitBreakerTest {
     public void testChangeEvents() {
         final EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(OPENING_THRESHOLD, 1,
                 TimeUnit.SECONDS);
-        final ChangeListener listener = new ChangeListener(breaker);
-        breaker.addChangeListener(listener);
+        final ChangeObserver observer = new ChangeObserver();
+        breaker.addObserver(observer);
         breaker.open();
         breaker.close();
-        listener.verify(Boolean.TRUE, Boolean.FALSE);
+        observer.verify(Boolean.TRUE, Boolean.FALSE);
     }
 
     /**
-     * Tests whether a change listener can be removed.
+     * Tests whether a change observer can be removed.
      */
     @Test
-    public void testRemoveChangeListener() {
+    public void testRemoveChangeObserver() {
         final EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(OPENING_THRESHOLD, 1,
                 TimeUnit.SECONDS);
-        final ChangeListener listener = new ChangeListener(breaker);
-        breaker.addChangeListener(listener);
+        final ChangeObserver observer = new ChangeObserver();
+        breaker.addObserver(observer);
         breaker.open();
-        breaker.removeChangeListener(listener);
+        breaker.deleteObserver(observer);
         breaker.close();
-        listener.verify(Boolean.TRUE);
+        observer.verify(Boolean.TRUE);
     }
 
     /**
@@ -276,8 +275,8 @@ public class EventCountCircuitBreakerTest {
     public void testStateTransitionGuarded() throws InterruptedException {
         final EventCountCircuitBreaker breaker = new EventCountCircuitBreaker(OPENING_THRESHOLD, 1,
                 TimeUnit.SECONDS);
-        final ChangeListener listener = new ChangeListener(breaker);
-        breaker.addChangeListener(listener);
+        final ChangeObserver observer = new ChangeObserver();
+        breaker.addObserver(observer);
 
         final int threadCount = 128;
         final CountDownLatch latch = new CountDownLatch(1);
@@ -300,7 +299,7 @@ public class EventCountCircuitBreakerTest {
         for (final Thread thread : threads) {
             thread.join();
         }
-        listener.verify(Boolean.TRUE);
+        observer.verify(Boolean.TRUE);
     }
 
     /**
@@ -310,15 +309,15 @@ public class EventCountCircuitBreakerTest {
     public void testChangeEventsGeneratedByAutomaticTransitions() {
         final EventCountCircuitBreakerTestImpl breaker = new EventCountCircuitBreakerTestImpl(OPENING_THRESHOLD, 2,
                 TimeUnit.SECONDS, CLOSING_THRESHOLD, 1, TimeUnit.SECONDS);
-        final ChangeListener listener = new ChangeListener(breaker);
-        breaker.addChangeListener(listener);
+        final ChangeObserver observer = new ChangeObserver();
+        breaker.addObserver(observer);
         long time = 0;
         for (int i = 0; i <= OPENING_THRESHOLD; i++, time += 1000) {
             breaker.at(time).incrementAndCheckState();
         }
         breaker.at(NANO_FACTOR + 1).checkState();
         breaker.at(3 * NANO_FACTOR).checkState();
-        listener.verify(Boolean.TRUE, Boolean.FALSE);
+        observer.verify(Boolean.TRUE, Boolean.FALSE);
     }
 
     /**
@@ -359,34 +358,24 @@ public class EventCountCircuitBreakerTest {
     }
 
     /**
-     * A test change listener for checking whether correct change events are generated.
+     * A test change observer for checking whether correct change events are generated.
      */
-    private static class ChangeListener implements PropertyChangeListener {
-        /** The expected event source. */
-        private final Object expectedSource;
-
-        /** A list with the updated values extracted from received change events. */
-        private final List<Boolean> changedValues;
+    private static class ChangeObserver implements Observer {
+        /** A list that keeps track of the OPEN state in an observable circuit breaker. */
+        private final List<Boolean> circuitIsOpenValues;
 
         /**
-         * Creates a new instance of {@code ChangeListener} and sets the expected event
-         * source.
-         *
-         * @param source the expected event source
+         * Creates a new instance of {@code ChangeObserver}.
          */
-        ChangeListener(final Object source) {
-            expectedSource = source;
-            changedValues = new ArrayList<>();
+        ChangeObserver() {
+            circuitIsOpenValues = new ArrayList<>();
         }
 
         @Override
-        public void propertyChange(final PropertyChangeEvent evt) {
-            assertEquals("Wrong event source", expectedSource, evt.getSource());
-            assertEquals("Wrong property name", "open", evt.getPropertyName());
-            final Boolean newValue = (Boolean) evt.getNewValue();
-            final Boolean oldValue = (Boolean) evt.getOldValue();
-            assertNotEquals("Old and new value are equal", newValue, oldValue);
-            changedValues.add(newValue);
+        public void update(Observable o, Object arg) {
+            AbstractCircuitBreaker<?> circuitBreaker = (AbstractCircuitBreaker<?>) o;
+            boolean isOpen = circuitBreaker.isOpen();
+            circuitIsOpenValues.add(isOpen);
         }
 
         /**
@@ -396,7 +385,7 @@ public class EventCountCircuitBreakerTest {
          */
         public void verify(final Boolean... values) {
             assertArrayEquals(values,
-                    changedValues.toArray(new Boolean[changedValues.size()]));
+                    circuitIsOpenValues.toArray(new Boolean[circuitIsOpenValues.size()]));
         }
     }
 }

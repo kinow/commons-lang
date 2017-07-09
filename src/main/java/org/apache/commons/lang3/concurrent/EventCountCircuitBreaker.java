@@ -18,6 +18,7 @@ package org.apache.commons.lang3.concurrent;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Observer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -114,7 +115,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * In addition to automatic state transitions, the state of a circuit breaker can be
  * changed manually using the methods {@link #open()} and {@link #close()}. It is also
- * possible to register {@code PropertyChangeListener} objects that get notified whenever
+ * possible to register {@link Observer} objects that get notified whenever
  * a state transition occurs. This is useful, for instance to directly react on a freshly
  * detected error condition.
  * </p>
